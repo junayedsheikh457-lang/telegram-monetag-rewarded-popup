@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Earn by Watching Ads</title>
+  <link rel="stylesheet" href="style.css" />
+
+  <!-- ============================== -->
+  <!-- Monetag Rewarded Popup Script  -->
+  <!-- এখানে Monetag থেকে পাওয়া script বসাবে -->
+  <!-- উদাহরণ: -->
+  <!-- <script src="https://domain.com/sdk.js" data-zone="XXXXXX" data-sdk="show_XXXXXX"></script> -->
+  <!-- ============================== -->
+
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+  <div class="container">
+    <h1>🎁 অ্যাড দেখে ইনকাম করো</h1>
+    <p class="balance">তোমার ব্যালেন্স: <span id="balance">0.00</span> ৳</p>
+
+    <button id="watchAdBtn" class="btn">অ্যাড দেখো ও রিওয়ার্ড নাও</button>
+
+    <p class="note">অ্যাড দেখার পর রিওয়ার্ড অটো যোগ হবে</p>
+  </div>
+
+  <script>
+    // Telegram WebApp
+    const tg = window.Telegram.WebApp;
+    tg.ready();
+    tg.expand();
+
+    // ইউজার আইডি
+    const userId = tg.initDataUnsafe?.user?.id || "guest_" + Date.now();
+
+    // ব্যালেন্স (লোকাল স্টোরেজ - ডেমো)
+    let balance = parseFloat(localStorage.getItem("balance") || "0");
+    document.getElementById("balance").innerText = balance.toFixed(2);
+
+    document.getElementById("watchAdBtn").addEventListener("click", function () {
+      // ==============================
+      // Monetag Rewarded Popup কল
+      // show_XXXXXX জায়গায় তোমার আসল function নাম বসাবে
+      // ==============================
+
+      if (typeof show_XXXXXX === "function") {
+        show_XXXXXX({
+          ymid: userId.toString()
+        }).then(() => {
+          // অ্যাড সফলভাবে দেখানো হয়েছে
+          balance += 0.05; // ডেমো রিওয়ার্ড (পরে পোস্টব্যাক দিয়ে কন্ট্রোল করবে)
+          localStorage.setItem("balance", balance);
+          document.getElementById("balance").innerText = balance.toFixed(2);
+          tg.showAlert("রিওয়ার্ড পেয়েছো! +0.05 ৳");
+        }).catch((err) => {
+          console.log(err);
+          tg.showAlert("অ্যাড পাওয়া যায়নি। একটু পর আবার চেষ্টা করো।");
+        });
+      } else {
+        tg.showAlert("Monetag script এখনো লোড হয়নি বা zone সেট করা হয়নি।");
+      }
+    });
+  </script>
+</body>
+</html>
