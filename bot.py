@@ -1,49 +1,44 @@
-import os
+import os, requests
 from dotenv import load_dotenv
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
-from telegram.ext import Application, CommandHandler, ContextTypes
+from flask import Flask, request
 
 load_dotenv()
+BOT_TOKEN=os.getenv('BOT_TOKEN','')
+PORT=int(os.getenv('PORT','10000'))
+RENDER_EXTERNAL_URL=os.getenv('RENDER_EXTERNAL_URL','').rstrip('/')
+WEBHOOK_SECRET=os.getenv('WEBHOOK_SECRET','')
+MINIAPP_URL=os.getenv('MINIAPP_URL') or RENDER_EXTERNAL_URL
 
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-MINIAPP_URL = os.getenv("MINIAPP_URL")
-PORT = int(os.environ.get("PORT", 10000))
+app=Flask(__name__)
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [
-        [InlineKeyboardButton(
-            text="🎁 অ্যাড দেখে রিওয়ার্ড নাও",
-            web_app=WebAppInfo(url=MINIAPP_URL)
-        )]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
+def telegram(method, payload):
+    return requests.post(f'https://api.telegram.org/bot{BOT_TOKEN}/{method}', json=payload, timeout=20)
 
-    await update.message.reply_text(
-        "স্বাগতম!\n\n"
-        "নিচের বাটনে ক্লিক করে Mini App ওপেন করো এবং অ্যাড দেখে রিওয়ার্ড নাও।",
-        reply_markup=reply_markup
-    )
+def send_start(chat_id):
+    keyboard={'inline_keyboard':[[{'text':'🎁 অ্যাড দেখে রিওয়ার্ড নাও','web_app':{'url':MINIAPP_URL}}]]}
+    telegram('sendMessage', {'chat_id':chat_id,'text':'স্বাগতম!\n\nনিচের বাটনে ক্লিক করে Mini App ওপেন করো এবং verified rewarded ad দেখে রিওয়ার্ড নাও।','reply_markup':keyboard})
 
-def main():
-    application = Application.builder().token(BOT_TOKEN).build()
-    application.add_handler(CommandHandler("start", start))
+@app.post('/telegram/webhook')
+def webhook():
+    if WEBHOOK_SECRET and request.headers.get('X-Telegram-Bot-Api-Secret-Token') != WEBHOOK_SECRET:
+        return 'forbidden',403
+    update=request.get_json(silent=True) or {}
+    msg=update.get('message') or {}
+    text=msg.get('text','')
+    if text.startswith('/start'):
+        send_start(msg.get('chat',{}).get('id'))
+    return 'ok'
 
-    print("Bot is starting with webhook...")
+@app.get('/bot-health')
+def bot_health(): return {'ok':True}
 
-    # Render automatically provides the service URL via RENDER_EXTERNAL_URL
-    webhook_url = os.getenv("RENDER_EXTERNAL_URL")
-
-    if webhook_url:
-        print(f"Using webhook: {webhook_url}")
-        application.run_webhook(
-            listen="0.0.0.0",
-            port=PORT,
-            url_path=BOT_TOKEN,          # secret path
-            webhook_url=f"{webhook_url}/{BOT_TOKEN}"
-        )
-    else:
-        print("No RENDER_EXTERNAL_URL found. Running polling (local only)...")
-        application.run_polling()
-
-if __name__ == "__main__":
-    main()
+if __name__=='__main__':
+    if not BOT_TOKEN:
+        raise RuntimeError('BOT_TOKEN is required')
+    if RENDER_EXTERNAL_URL:
+        url=f'{RENDER_EXTERNAL_URL}/telegram/webhook'
+        payload={'url':url}
+        if WEBHOOK_SECRET: payload['secret_token']=WEBHOOK_SECRET
+        r=telegram('setWebhook',payload)
+        print('setWebhook:',r.text)
+    app.run(host='0.0.0.0',port=PORT)
