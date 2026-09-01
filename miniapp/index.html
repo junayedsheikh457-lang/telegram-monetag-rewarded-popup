@@ -3,55 +3,78 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>Earn by Watching Ads</title>
+  <title>Reward Center</title>
   <link rel="stylesheet" href="style.css" />
-
-  <!-- Monetag Rewarded Popup Script -->
-  <script src='//libtl.com/sdk.js' data-zone='11677828' data-sdk='show_11677828'></script>
-
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+  <!-- Monetag Rewarded Popup - your zone -->
+  <script src='//libtl.com/sdk.js' data-zone='11677828' data-sdk='show_11677828'></script>
 </head>
 <body>
   <div class="container">
-    <h1>🎁 অ্যাড দেখে ইনকাম করো</h1>
-    <p class="balance">তোমার ব্যালেন্স: <span id="balance">0.00</span> ৳</p>
-
-    <button id="watchAdBtn" class="btn">অ্যাড দেখো ও রিওয়ার্ড নাও</button>
-
-    <p class="note">অ্যাড দেখার পর রিওয়ার্ড অটো যোগ হবে</p>
+    <div class="card">
+      <div class="icon">🎁</div>
+      <h1>অ্যাড দেখে রিওয়ার্ড নাও</h1>
+      <div class="balance-box">
+        <span>বর্তমান ব্যালেন্স</span>
+        <strong><span id="balance">0.00</span> ৳</strong>
+      </div>
+      <button id="watchAdBtn" class="btn">▶ অ্যাড দেখো</button>
+      <p id="status" class="status">বাটনে চাপ দিয়ে rewarded ad চালু করো</p>
+      <p class="note">রিওয়ার্ড শুধু verified ad event-এর পর server থেকে যোগ হবে।</p>
+    </div>
   </div>
 
   <script>
-    // Telegram WebApp
-    const tg = window.Telegram.WebApp;
-    tg.ready();
-    tg.expand();
+    const tg = window.Telegram?.WebApp;
+    tg?.ready();
+    tg?.expand();
 
-    // ইউজার আইডি
-    const userId = tg.initDataUnsafe?.user?.id || "guest_" + Date.now();
+    const userId = tg?.initDataUnsafe?.user?.id;
+    const balanceEl = document.getElementById('balance');
+    const statusEl = document.getElementById('status');
+    const btn = document.getElementById('watchAdBtn');
 
-    // ব্যালেন্স (লোকাল স্টোরেজ - ডেমো)
-    let balance = parseFloat(localStorage.getItem("balance") || "0");
-    document.getElementById("balance").innerText = balance.toFixed(2);
+    function status(text) { statusEl.textContent = text; }
 
-    document.getElementById("watchAdBtn").addEventListener("click", function () {
-      if (typeof show_11677828 === "function") {
-        show_11677828({
-          ymid: userId.toString()
-        }).then(() => {
-          // অ্যাড সফলভাবে দেখানো হয়েছে
-          balance += 0.05; // ডেমো রিওয়ার্ড (পরে পোস্টব্যাক দিয়ে কন্ট্রোল করবে)
-          localStorage.setItem("balance", balance);
-          document.getElementById("balance").innerText = balance.toFixed(2);
-          tg.showAlert("রিওয়ার্ড পেয়েছো! +0.05 ৳");
-        }).catch((err) => {
-          console.log(err);
-          tg.showAlert("অ্যাড পাওয়া যায়নি। একটু পর আবার চেষ্টা করো।");
-        });
-      } else {
-        tg.showAlert("Monetag script এখনো লোড হয়নি। একটু অপেক্ষা করে আবার চেষ্টা করো।");
+    async function loadBalance() {
+      if (!userId) return;
+      try {
+        const res = await fetch('/api/me?user_id=' + encodeURIComponent(userId));
+        if (!res.ok) return;
+        const data = await res.json();
+        balanceEl.textContent = Number(data.balance || 0).toFixed(2);
+      } catch (_) {}
+    }
+
+    async function watchAd() {
+      if (!userId) {
+        status('Telegram থেকে Mini App খুলতে হবে।');
+        return;
       }
-    });
+      if (typeof window.show_11677828 !== 'function') {
+        status('Monetag ad এখনো ready হয়নি। একটু পরে চেষ্টা করো।');
+        return;
+      }
+
+      btn.disabled = true;
+      status('Ad খোলা হচ্ছে…');
+      try {
+        await window.show_11677828({ ymid: String(userId) });
+        status('Ad শেষ হয়েছে। Verification-এর জন্য অপেক্ষা করো…');
+        await new Promise(resolve => setTimeout(resolve, 2500));
+        await loadBalance();
+        status('Verified balance আপডেট হয়েছে।');
+      } catch (err) {
+        console.error(err);
+        status('Ad complete হয়নি। কোনো reward যোগ করা হয়নি।');
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    btn.addEventListener('click', watchAd);
+    loadBalance();
   </script>
 </body>
 </html>
