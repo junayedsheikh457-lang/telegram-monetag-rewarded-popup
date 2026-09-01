@@ -1,80 +1,10 @@
-<!DOCTYPE html>
-<html lang="bn">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>Reward Center</title>
-  <link rel="stylesheet" href="style.css" />
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
-
-  <!-- Monetag Rewarded Popup - your zone -->
-  <script src='//libtl.com/sdk.js' data-zone='11677828' data-sdk='show_11677828'></script>
-</head>
-<body>
-  <div class="container">
-    <div class="card">
-      <div class="icon">🎁</div>
-      <h1>অ্যাড দেখে রিওয়ার্ড নাও</h1>
-      <div class="balance-box">
-        <span>বর্তমান ব্যালেন্স</span>
-        <strong><span id="balance">0.00</span> ৳</strong>
-      </div>
-      <button id="watchAdBtn" class="btn">▶ অ্যাড দেখো</button>
-      <p id="status" class="status">বাটনে চাপ দিয়ে rewarded ad চালু করো</p>
-      <p class="note">রিওয়ার্ড শুধু verified ad event-এর পর server থেকে যোগ হবে।</p>
-    </div>
-  </div>
-
-  <script>
-    const tg = window.Telegram?.WebApp;
-    tg?.ready();
-    tg?.expand();
-
-    const userId = tg?.initDataUnsafe?.user?.id;
-    const balanceEl = document.getElementById('balance');
-    const statusEl = document.getElementById('status');
-    const btn = document.getElementById('watchAdBtn');
-
-    function status(text) { statusEl.textContent = text; }
-
-    async function loadBalance() {
-      if (!userId) return;
-      try {
-        const res = await fetch('/api/me?user_id=' + encodeURIComponent(userId));
-        if (!res.ok) return;
-        const data = await res.json();
-        balanceEl.textContent = Number(data.balance || 0).toFixed(2);
-      } catch (_) {}
-    }
-
-    async function watchAd() {
-      if (!userId) {
-        status('Telegram থেকে Mini App খুলতে হবে।');
-        return;
-      }
-      if (typeof window.show_11677828 !== 'function') {
-        status('Monetag ad এখনো ready হয়নি। একটু পরে চেষ্টা করো।');
-        return;
-      }
-
-      btn.disabled = true;
-      status('Ad খোলা হচ্ছে…');
-      try {
-        await window.show_11677828({ ymid: String(userId) });
-        status('Ad শেষ হয়েছে। Verification-এর জন্য অপেক্ষা করো…');
-        await new Promise(resolve => setTimeout(resolve, 2500));
-        await loadBalance();
-        status('Verified balance আপডেট হয়েছে।');
-      } catch (err) {
-        console.error(err);
-        status('Ad complete হয়নি। কোনো reward যোগ করা হয়নি।');
-      } finally {
-        btn.disabled = false;
-      }
-    }
-
-    btn.addEventListener('click', watchAd);
-    loadBalance();
-  </script>
-</body>
-</html>
+<!doctype html>
+<html lang="bn"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><title>Reward Center</title><link rel="stylesheet" href="style.css"><script src="https://telegram.org/js/telegram-web-app.js"></script><script src='//libtl.com/sdk.js' data-zone='11677828' data-sdk='show_11677828'></script></head>
+<body><main class="wrap"><section class="card"><div class="logo">🎁</div><h1>Reward Center</h1><p class="sub">অ্যাড দেখে রিওয়ার্ড নাও</p><div class="balance"><span>তোমার ব্যালেন্স</span><b><i id="balance">0.00</i> ৳</b></div><button id="watch">▶ অ্যাড দেখো</button><p id="status">Rewarded ad চালু করতে বাটনে চাপ দাও</p><div class="info">প্রতি verified ad: <strong>৳0.05</strong><br>Reward server verification-এর পর যোগ হবে।</div><h3>সাম্প্রতিক রিওয়ার্ড</h3><div id="history" class="history">লোড হচ্ছে…</div></section></main>
+<script>
+const tg=window.Telegram?.WebApp; tg?.ready(); tg?.expand();
+const $=id=>document.getElementById(id); let userId=null,initData='';
+async function init(){initData=tg?.initData||''; if(!initData){$('status').textContent='Telegram Mini App থেকেই খুলতে হবে।';return} try{let r=await fetch('/api/session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({initData})});let d=await r.json();if(!r.ok)throw Error();userId=d.user_id;await refresh()}catch(e){$('status').textContent='Telegram verification ব্যর্থ হয়েছে।';}}
+async function refresh(){let r=await fetch('/api/me?user_id='+encodeURIComponent(userId));let d=await r.json();$('balance').textContent=Number(d.balance||0).toFixed(2);let h=await fetch('/api/history?user_id='+encodeURIComponent(userId));let x=await h.json();$('history').innerHTML=x.items.length?x.items.map(a=>`<div><span>🎁 ${a.source}</span><b>+৳${Number(a.amount).toFixed(2)}</b></div>`).join(''):'এখনো কোনো reward নেই।';}
+$('watch').onclick=async()=>{if(!userId)return;$('watch').disabled=true;$('status').textContent='Ad খোলা হচ্ছে…';try{if(typeof window.show_11677828!=='function')throw Error('not-ready');await window.show_11677828({ymid:String(userId)});$('status').textContent='Ad শেষ। Monetag verification-এর জন্য অপেক্ষা করো…';setTimeout(refresh,4000)}catch(e){$('status').textContent='Ad complete হয়নি। Reward যোগ করা হয়নি।'}finally{setTimeout(()=>{$('watch').disabled=false},5000)}};init();
+</script></body></html>
