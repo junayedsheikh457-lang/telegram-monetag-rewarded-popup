@@ -3,7 +3,7 @@ services:
     name: monetag-telegram-reward
     runtime: python
     buildCommand: pip install -r requirements.txt
-    startCommand: python app.py
+    startCommand: python bot.py
     plan: free
     envVars:
       - key: BOT_TOKEN
@@ -12,7 +12,13 @@ services:
         sync: false
       - key: POSTBACK_SECRET
         sync: false
+      - key: WEBHOOK_SECRET
+        sync: false
+      - key: MINIAPP_URL
+        sync: false
       - key: REWARD_PER_AD
         value: "0.05"
       - key: AD_COOLDOWN_SECONDS
         value: "30"
+      - key: AD_SESSION_TTL_SECONDS
+        value: "300"
