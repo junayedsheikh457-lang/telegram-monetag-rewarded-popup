@@ -1,53 +1,41 @@
 # Telegram Mini App + Monetag Rewarded Popup
 
-এই প্রজেক্টে তুমি পাবে:
-- Telegram Mini App (Rewarded Popup অ্যাডের জন্য)
-- বেসিক Telegram Bot (Python)
-- Monetag ইন্টিগ্রেশনের টেমপ্লেট
+Render Free-তে চালানোর জন্য Telegram Mini App + Monetag Rewarded Popup backend।
 
-## Setup Steps
+### Features
+- Telegram Mini App UI
+- Monetag zone `11677828`
+- Telegram `initData` server-side validation
+- Server-side balance
+- Reward history
+- One-time pending ad session
+- Postback-based reward credit
+- Duplicate/cooldown protection
+- Simple admin dashboard
+- Telegram webhook
 
-### 1. Monetag অ্যাকাউন্ট
-1. https://monetag.com এ Publisher হিসেবে সাইন আপ করো
-2. Telegram Mini App অ্যাড করো
-3. **Rewarded Popup** zone তৈরি করো
-4. যে SDK script পাবে সেটা কপি করো
+### Render deployment
+1. GitHub repo থেকে Render-এ **Web Service** তৈরি করো।
+2. Build Command: `pip install -r requirements.txt`
+3. Start Command: `python app.py`
+4. Environment variables যোগ করো:
+   - `BOT_TOKEN` = BotFather token
+   - `ADMIN_PASSWORD` = নিজের admin password
+   - `POSTBACK_SECRET` = নিজের random secret
+   - `WEBHOOK_SECRET` = নিজের random secret
+   - `REWARD_PER_AD` = `0.05`
+   - `AD_COOLDOWN_SECONDS` = `30`
+5. Deploy হওয়ার পরে Render URL-টাই `MINIAPP_URL` হিসেবে দিতে পারো। `RENDER_EXTERNAL_URL` থাকলে webhook নিজে সেট হবে।
 
-### 2. Mini App হোস্ট করো
-- `miniapp/` ফোল্ডারের কোড Vercel / Netlify / Railway-এ হোস্ট করো
-- HTTPS লিংক লাগবে
+### Monetag postback
+Mini App ad চালুর সময় Telegram user ID `ymid` হিসেবে পাঠানো হচ্ছে। Monetag dashboard-এ postback URL configure করতে হবে এবং তোমার Monetag-এর actual postback parameter names অনুযায়ী `user_id`/`ymid` mapping করতে হবে। এই server endpoint হলো:
 
-### 3. Bot Setup
-```bash
-pip install -r requirements.txt
-```
+`https://YOUR-SERVICE.onrender.com/monetag/postback?secret=YOUR_POSTBACK_SECRET&user_id={ymid}&event_id={event_id}`
 
-`.env` ফাইল তৈরি করো:
-```
-BOT_TOKEN=তোমার_বট_টোকেন
-MINIAPP_URL=https://তোমার-miniapp-লিংক
-```
+**নোট:** Monetag-এর dashboard যে exact postback macro/parameter দেয় সেটাই ব্যবহার করবে; কোনো macro অনুমান করে বসাবে না।
 
-তারপর রান করো:
-```bash
-python bot.py
-```
+### Admin
+`https://YOUR-SERVICE.onrender.com/admin` খুলে password দিয়ে dashboard ব্যবহার করো।
 
-### 4. Monetag Script বসাও
-`miniapp/index.html` ফাইলে Monetag-এর script বসাবে (placeholder আছে)।
-
-### গুরুত্বপূর্ণ
-- `show_XXXXXX` জায়গায় Monetag যে function নাম দিয়েছে সেটা বসাবে
-- `data-zone` এ তোমার zone ID বসাবে
-- প্রোডাকশনে postback ব্যবহার করো (ফ্রড কমাতে)
-
-## Structure
-```
-├── bot.py                 # Telegram Bot
-├── requirements.txt
-├── .env.example
-├── miniapp/
-│   ├── index.html         # Mini App frontend
-│   └── style.css
-└── README.md
-```
+### Important
+Render-এর free filesystem persistent database হিসেবে ধরা উচিত নয়। Testing-এর জন্য SQLite ঠিক আছে; production-এ balance/withdrawal data স্থায়ী রাখতে external PostgreSQL (যেমন Neon) connect করা উচিত।
