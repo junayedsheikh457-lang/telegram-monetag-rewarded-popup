@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: monetag-telegram-reward
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python app.py
+    plan: free
+    envVars:
+      - key: BOT_TOKEN
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: POSTBACK_SECRET
+        sync: false
+      - key: REWARD_PER_AD
+        value: "0.05"
+      - key: AD_COOLDOWN_SECONDS
+        value: "30"
