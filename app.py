@@ -79,7 +79,7 @@ def _save_product(pid=None):
  vals=(name,str(b.get('category','')),float(b.get('price',0)),float(b.get('old_price',0) or 0),image,json.dumps(gallery,ensure_ascii=False),str(b.get('description','')),int(b.get('stock',0)),now)
  c=db()
  if pid is None:
-  c.execute('INSERT INTO products(name,category,price,old_price,image_url,gallery,description,stock,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)',vals); pid=c.lastrowid
+  c.execute('INSERT INTO products(name,category,price,old_price,image_url,gallery,description,stock,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)',vals+(now,)); pid=c.lastrowid
  else:
   c.execute('UPDATE products SET name=?,category=?,price=?,old_price=?,image_url=?,gallery=?,description=?,stock=?,updated_at=? WHERE id=?',vals+(pid,))
  c.commit(); c.close(); return jsonify(ok=True,id=pid)
