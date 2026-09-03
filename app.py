@@ -6,15 +6,21 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(mess
 BASE=os.path.dirname(os.path.abspath(__file__)); DB_PATH=os.getenv('DB_PATH',os.path.join(BASE,'data.db'))
 BOT_TOKEN=os.getenv('BOT_TOKEN','').strip(); ADMIN_PASSWORD=os.getenv('ADMIN_PASSWORD',''); PORT=int(os.getenv('PORT','10000')); PUBLIC_URL=os.getenv('RENDER_EXTERNAL_URL','').rstrip('/'); MINIAPP_URL=(os.getenv('MINIAPP_URL') or PUBLIC_URL).rstrip('/')
 app=Flask(__name__,static_folder='miniapp')
+@app.after_request
+def cors(response):
+ response.headers['Access-Control-Allow-Origin']='*'
+ response.headers['Access-Control-Allow-Headers']='Content-Type, X-Admin-Password'
+ response.headers['Access-Control-Allow-Methods']='GET,POST,PUT,DELETE,OPTIONS'
+ return response
 def db(): c=sqlite3.connect(DB_PATH,timeout=20); c.row_factory=sqlite3.Row; return c
 def init_db():
- c=db(); c.executescript('''CREATE TABLE IF NOT EXISTS products(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT NOT NULL,category TEXT,price REAL NOT NULL,old_price REAL,image_url TEXT,description TEXT,stock INTEGER NOT NULL DEFAULT 0,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL);CREATE TABLE IF NOT EXISTS orders(id INTEGER PRIMARY KEY AUTOINCREMENT,customer_name TEXT NOT NULL,phone TEXT NOT NULL,address TEXT NOT NULL,items TEXT NOT NULL,total REAL NOT NULL,status TEXT NOT NULL DEFAULT 'Pending',created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL);CREATE TABLE IF NOT EXISTS users(telegram_id TEXT PRIMARY KEY,username TEXT,first_name TEXT,balance REAL NOT NULL DEFAULT 0,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL);CREATE TABLE IF NOT EXISTS rewards(id INTEGER PRIMARY KEY AUTOINCREMENT,telegram_id TEXT NOT NULL,amount REAL NOT NULL,event_id TEXT UNIQUE,source TEXT NOT NULL,created_at INTEGER NOT NULL);''');
+ c=db(); c.executescript('''CREATE TABLE IF NOT EXISTS products(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT NOT NULL,category TEXT,price REAL NOT NULL,old_price REAL,image_url TEXT,description TEXT,stock INTEGER NOT NULL DEFAULT 0,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL);CREATE TABLE IF NOT EXISTS orders(id INTEGER PRIMARY KEY AUTOINCREMENT,customer_name TEXT NOT NULL,phone TEXT NOT NULL,address TEXT NOT NULL,items TEXT NOT NULL,total REAL NOT NULL,status TEXT NOT NULL DEFAULT 'Pending',created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL);CREATE TABLE IF NOT EXISTS users(telegram_id TEXT PRIMARY KEY,username TEXT,first_name TEXT,balance REAL NOT NULL DEFAULT 0,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL);CREATE TABLE IF NOT EXISTS rewards(id INTEGER PRIMARY KEY AUTOINCREMENT,telegram_id TEXT NOT NULL,amount REAL NOT NULL,event_id TEXT UNIQUE,source TEXT NOT NULL,created_at INTEGER NOT NULL);''')
  try: c.execute('ALTER TABLE products ADD COLUMN gallery TEXT DEFAULT \'[]\'')
  except sqlite3.OperationalError: pass
  c.commit(); c.close()
 def admin_ok(): return bool(ADMIN_PASSWORD) and hmac.compare_digest(request.headers.get('X-Admin-Password',''),ADMIN_PASSWORD)
 def product_dict(r):
- x=dict(r); x['image']=x.get('image_url') or ''; x['gallery']=json.loads(x.get('gallery') or '[]');
+ x=dict(r); x['image']=x.get('image_url') or ''; x['gallery']=json.loads(x.get('gallery') or '[]')
  if x['image'] and (not x['gallery'] or x['gallery'][0]!=x['image']): x['gallery']=[x['image']]+[u for u in x['gallery'] if u!=x['image']]
  return x
 @app.get('/')
@@ -35,14 +41,14 @@ def fashion_products():
 @app.get('/api/fashion/products/<int:pid>')
 def fashion_product(pid):
  c=db(); r=c.execute('SELECT * FROM products WHERE id=?',(pid,)).fetchone(); c.close(); return (jsonify(product=product_dict(r)) if r else (jsonify(error='not_found'),404))
-@app.post('/api/orders')
-def create_order(): return _create_order()
-@app.post('/api/fashion/orders')
-def fashion_order(): return _create_order()
 def _create_order():
  b=request.get_json(silent=True) or {}; name=str(b.get('customer_name','')).strip(); phone=str(b.get('phone','')).strip(); address=str(b.get('address','')).strip(); items=b.get('items',[]); total=float(b.get('total',0))
  if not name or not phone or not address or not isinstance(items,list) or not items:return jsonify(ok=False,error='missing_order_data'),400
  now=int(time.time()); c=db(); c.execute('INSERT INTO orders(customer_name,phone,address,items,total,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)',(name,phone,address,json.dumps(items,ensure_ascii=False),'%.2f'%total,'Pending',now,now)); oid=c.lastrowid; c.commit(); c.close(); return jsonify(ok=True,order_id=oid)
+@app.post('/api/orders')
+def create_order(): return _create_order()
+@app.post('/api/fashion/orders')
+def fashion_order(): return _create_order()
 def _stats():
  c=db(); out={'products':c.execute('SELECT COUNT(*) c FROM products').fetchone()['c'],'orders':c.execute('SELECT COUNT(*) c FROM orders').fetchone()['c'],'pending':c.execute("SELECT COUNT(*) c FROM orders WHERE status='Pending'").fetchone()['c'],'sales':float(c.execute("SELECT COALESCE(SUM(total),0) s FROM orders WHERE status!='Cancelled'").fetchone()['s'])}; c.close(); return out
 @app.get('/api/admin/stats')
