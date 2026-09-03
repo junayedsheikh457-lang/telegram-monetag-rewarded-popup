@@ -3,7 +3,7 @@ services:
     name: monetag-telegram-reward
     runtime: python
     buildCommand: pip install -r requirements.txt
-    startCommand: python app.py
+    startCommand: python site.py
     plan: free
     envVars:
       - key: BOT_TOKEN
