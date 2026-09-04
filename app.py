@@ -12,10 +12,18 @@ def cors(response):
  response.headers['Access-Control-Allow-Headers']='Content-Type, X-Admin-Password'
  response.headers['Access-Control-Allow-Methods']='GET,POST,PUT,DELETE,OPTIONS'
  return response
-def db(): c=sqlite3.connect(DB_PATH,timeout=20); c.row_factory=sqlite3.Row; return c
+def db():
+ c=sqlite3.connect(DB_PATH,timeout=60)
+ c.row_factory=sqlite3.Row
+ c.execute('PRAGMA busy_timeout=60000')
+ try: c.execute('PRAGMA journal_mode=WAL')
+ except sqlite3.OperationalError: pass
+ c.execute('PRAGMA synchronous=NORMAL')
+ return c
 def init_db():
- c=db(); c.executescript('''CREATE TABLE IF NOT EXISTS products(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT NOT NULL,category TEXT,price REAL NOT NULL,old_price REAL,image_url TEXT,description TEXT,stock INTEGER NOT NULL DEFAULT 0,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL);CREATE TABLE IF NOT EXISTS orders(id INTEGER PRIMARY KEY AUTOINCREMENT,customer_name TEXT NOT NULL,phone TEXT NOT NULL,address TEXT NOT NULL,items TEXT NOT NULL,total REAL NOT NULL,status TEXT NOT NULL DEFAULT 'Pending',created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL);CREATE TABLE IF NOT EXISTS users(telegram_id TEXT PRIMARY KEY,username TEXT,first_name TEXT,balance REAL NOT NULL DEFAULT 0,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL);CREATE TABLE IF NOT EXISTS rewards(id INTEGER PRIMARY KEY AUTOINCREMENT,telegram_id TEXT NOT NULL,amount REAL NOT NULL,event_id TEXT UNIQUE,source TEXT NOT NULL,created_at INTEGER NOT NULL);''')
- try: c.execute('ALTER TABLE products ADD COLUMN gallery TEXT DEFAULT \'[]\'')
+ c=db()
+ c.executescript('''CREATE TABLE IF NOT EXISTS products(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT NOT NULL,category TEXT,price REAL NOT NULL,old_price REAL,image_url TEXT,description TEXT,stock INTEGER NOT NULL DEFAULT 0,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL);CREATE TABLE IF NOT EXISTS orders(id INTEGER PRIMARY KEY AUTOINCREMENT,customer_name TEXT NOT NULL,phone TEXT NOT NULL,address TEXT NOT NULL,items TEXT NOT NULL,total REAL NOT NULL,status TEXT NOT NULL DEFAULT 'Pending',created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL);CREATE TABLE IF NOT EXISTS users(telegram_id TEXT PRIMARY KEY,username TEXT,first_name TEXT,balance REAL NOT NULL DEFAULT 0,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL);CREATE TABLE IF NOT EXISTS rewards(id INTEGER PRIMARY KEY AUTOINCREMENT,telegram_id TEXT NOT NULL,amount REAL NOT NULL,event_id TEXT UNIQUE,source TEXT NOT NULL,created_at INTEGER NOT NULL);''')
+ try: c.execute("ALTER TABLE products ADD COLUMN gallery TEXT DEFAULT '[]'")
  except sqlite3.OperationalError: pass
  c.commit(); c.close()
 def admin_ok(): return bool(ADMIN_PASSWORD) and hmac.compare_digest(request.headers.get('X-Admin-Password',''),ADMIN_PASSWORD)
@@ -77,12 +85,20 @@ def _save_product(pid=None):
  if image and image not in gallery: gallery.insert(0,image)
  if not name:return jsonify(error='name_required'),400
  vals=(name,str(b.get('category','')),float(b.get('price',0)),float(b.get('old_price',0) or 0),image,json.dumps(gallery,ensure_ascii=False),str(b.get('description','')),int(b.get('stock',0)),now)
- c=db()
- if pid is None:
-  c.execute('INSERT INTO products(name,category,price,old_price,image_url,gallery,description,stock,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)',vals+(now,)); pid=c.lastrowid
- else:
-  c.execute('UPDATE products SET name=?,category=?,price=?,old_price=?,image_url=?,gallery=?,description=?,stock=?,updated_at=? WHERE id=?',vals+(pid,))
- c.commit(); c.close(); return jsonify(ok=True,id=pid)
+ for attempt in range(5):
+  c=None
+  try:
+   c=db()
+   if pid is None:
+    c.execute('INSERT INTO products(name,category,price,old_price,image_url,gallery,description,stock,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)',vals+(now,)); pid=c.lastrowid
+   else:
+    c.execute('UPDATE products SET name=?,category=?,price=?,old_price=?,image_url=?,gallery=?,description=?,stock=?,updated_at=? WHERE id=?',vals+(pid,))
+   c.commit(); c.close(); return jsonify(ok=True,id=pid)
+  except sqlite3.OperationalError as e:
+   if c: c.rollback(); c.close()
+   if 'locked' not in str(e).lower() or attempt==4: raise
+   time.sleep(0.5*(attempt+1))
+ return jsonify(error='database_locked'),503
 @app.post('/api/admin/products')
 def add_product(): return _save_product()
 @app.post('/api/fashion/admin/products')
@@ -93,7 +109,15 @@ def edit_product(pid): return _save_product(pid)
 def fashion_edit_product(pid): return _save_product(pid)
 def _delete_product(pid):
  if not admin_ok(): return jsonify(error='unauthorized'),401
- c=db(); c.execute('DELETE FROM products WHERE id=?',(pid,)); c.commit(); c.close(); return jsonify(ok=True)
+ for attempt in range(5):
+  c=None
+  try:
+   c=db(); c.execute('DELETE FROM products WHERE id=?',(pid,)); c.commit(); c.close(); return jsonify(ok=True)
+  except sqlite3.OperationalError as e:
+   if c: c.rollback(); c.close()
+   if 'locked' not in str(e).lower() or attempt==4: raise
+   time.sleep(0.5*(attempt+1))
+ return jsonify(error='database_locked'),503
 @app.delete('/api/admin/products/<int:pid>')
 def delete_product(pid): return _delete_product(pid)
 @app.delete('/api/fashion/admin/products/<int:pid>')
@@ -115,7 +139,15 @@ def _update_order(oid):
  if not admin_ok(): return jsonify(error='unauthorized'),401
  status=str((request.get_json(silent=True) or {}).get('status','Pending')); allowed={'Pending','Confirmed','Processing','Shipped','Delivered','Cancelled'}
  if status not in allowed:return jsonify(error='invalid_status'),400
- c=db();c.execute('UPDATE orders SET status=?,updated_at=? WHERE id=?',(status,int(time.time()),oid));c.commit();c.close();return jsonify(ok=True)
+ for attempt in range(5):
+  c=None
+  try:
+   c=db(); c.execute('UPDATE orders SET status=?,updated_at=? WHERE id=?',(status,int(time.time()),oid)); c.commit(); c.close(); return jsonify(ok=True)
+  except sqlite3.OperationalError as e:
+   if c: c.rollback(); c.close()
+   if 'locked' not in str(e).lower() or attempt==4: raise
+   time.sleep(0.5*(attempt+1))
+ return jsonify(error='database_locked'),503
 @app.put('/api/admin/orders/<int:oid>')
 def update_order(oid): return _update_order(oid)
 @app.put('/api/fashion/admin/orders/<int:oid>')
