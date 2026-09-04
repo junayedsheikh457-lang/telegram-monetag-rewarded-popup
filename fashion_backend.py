@@ -40,15 +40,10 @@ def init_fashion_db():
     CREATE INDEX IF NOT EXISTS idx_products_active ON products(active, category);
     CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status, created_at);
     ''')
-    # The main app's fashion admin routes use image_url + gallery. Older fashion
-    # databases were created with only image, so migrate them before requests.
     columns = {row['name'] for row in c.execute('PRAGMA table_info(products)').fetchall()}
-    if 'image_url' not in columns:
-        c.execute("ALTER TABLE products ADD COLUMN image_url TEXT DEFAULT ''")
-    if 'gallery' not in columns:
-        c.execute("ALTER TABLE products ADD COLUMN gallery TEXT DEFAULT '[]'")
-    if 'image' in columns:
-        c.execute("UPDATE products SET image_url=COALESCE(NULLIF(image_url,''), image) WHERE image_url IS NULL OR image_url='' OR image_url=''")
+    if 'image_url' not in columns: c.execute("ALTER TABLE products ADD COLUMN image_url TEXT DEFAULT ''")
+    if 'gallery' not in columns: c.execute("ALTER TABLE products ADD COLUMN gallery TEXT DEFAULT '[]'")
+    if 'image' in columns: c.execute("UPDATE products SET image_url=COALESCE(NULLIF(image_url,''), image) WHERE image_url IS NULL OR image_url='' ")
     c.execute("UPDATE products SET gallery=json_array(image_url) WHERE (gallery IS NULL OR gallery='' OR gallery='[]') AND image_url IS NOT NULL AND image_url!=''")
     if c.execute('SELECT COUNT(*) AS n FROM products').fetchone()['n'] == 0:
         now = int(time.time())
@@ -74,32 +69,42 @@ def admin_ok():
     return bool(ADMIN_PASSWORD) and hmac.compare_digest(supplied, ADMIN_PASSWORD)
 
 def require_admin():
-    if not admin_ok():
-        return jsonify(error='unauthorized'), 401
+    if not admin_ok(): return jsonify(error='unauthorized'), 401
     return None
 
 def product_dict(r):
     d = dict(r)
     d['active'] = bool(d['active'])
+    try: d['gallery'] = json.loads(d.get('gallery') or '[]')
+    except Exception: d['gallery'] = []
+    d['image_url'] = d.get('image_url') or d.get('image') or ''
+    d['image'] = d.get('image') or d['image_url']
     return d
+
+def clean_gallery(b):
+    raw = b.get('gallery') or []
+    if not isinstance(raw, list): raw = []
+    g=[]
+    for x in raw[:6]:
+        x=str(x).strip()
+        if x and x not in g: g.append(x)
+    image=str(b.get('image') or b.get('image_url') or '').strip()
+    if image and image not in g: g.insert(0,image)
+    return g, image or (g[0] if g else '')
 
 @app.get('/fashion')
 @app.get('/fashion/')
-def fashion_home():
-    return send_from_directory(FASHION_DIR, 'index.html')
+def fashion_home(): return send_from_directory(FASHION_DIR, 'index.html')
 
 @app.get('/fashion/admin')
 @app.get('/fashion/admin/')
-def fashion_admin():
-    return send_from_directory(FASHION_DIR, 'admin.html')
+def fashion_admin(): return send_from_directory(FASHION_DIR, 'admin.html')
 
 @app.get('/api/fashion/products')
 def fashion_products():
     category = request.args.get('category','all')
     q = request.args.get('q','').strip().lower()
-    c = fdb()
-    rows = c.execute('SELECT * FROM products WHERE active=1 ORDER BY id DESC').fetchall()
-    c.close()
+    c = fdb(); rows = c.execute('SELECT * FROM products WHERE active=1 ORDER BY id DESC').fetchall(); c.close()
     out=[]
     for r in rows:
         d=product_dict(r)
@@ -112,12 +117,7 @@ def fashion_products():
 def fashion_stats():
     err=require_admin()
     if err:return err
-    c=fdb()
-    products=c.execute('SELECT COUNT(*) n FROM products').fetchone()['n']
-    orders=c.execute('SELECT COUNT(*) n FROM orders').fetchone()['n']
-    pending=c.execute("SELECT COUNT(*) n FROM orders WHERE status='Pending'").fetchone()['n']
-    sales=c.execute("SELECT COALESCE(SUM(total),0) n FROM orders WHERE status!='Cancelled'").fetchone()['n']
-    c.close()
+    c=fdb(); products=c.execute('SELECT COUNT(*) n FROM products').fetchone()['n']; orders=c.execute('SELECT COUNT(*) n FROM orders').fetchone()['n']; pending=c.execute("SELECT COUNT(*) n FROM orders WHERE status='Pending'").fetchone()['n']; sales=c.execute("SELECT COALESCE(SUM(total),0) n FROM orders WHERE status!='Cancelled'").fetchone()['n']; c.close()
     return jsonify(products=products,orders=orders,pending=pending,sales=float(sales))
 
 @app.get('/api/fashion/admin/products')
@@ -131,24 +131,24 @@ def fashion_admin_products():
 def fashion_admin_product_create():
     err=require_admin()
     if err:return err
-    b=request.get_json(silent=True) or {}
-    name=str(b.get('name','')).strip(); category=str(b.get('category','1 Piece')).strip()
+    b=request.get_json(silent=True) or {}; name=str(b.get('name','')).strip(); category=str(b.get('category','1 Piece')).strip()
     try: price=float(b.get('price',0)); old=float(b.get('old_price',0) or 0); stock=int(b.get('stock',0) or 0)
     except (TypeError,ValueError): return jsonify(error='invalid_number'),400
     if not name or price <= 0 or stock < 0:return jsonify(error='invalid_product'),400
-    now=int(time.time()); c=fdb(); cur=c.execute('INSERT INTO products(name,category,price,old_price,image,stock,description,active,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)',(name,category,price,old,str(b.get('image','')).strip(),stock,str(b.get('description','')).strip(),1,now,now)); c.commit(); pid=cur.lastrowid; c.close()
+    gallery,image=clean_gallery(b); now=int(time.time()); c=fdb()
+    cur=c.execute('INSERT INTO products(name,category,price,old_price,image,image_url,gallery,stock,description,active,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',(name,category,price,old,image,image,json.dumps(gallery,ensure_ascii=False),stock,str(b.get('description','')).strip(),1,now,now)); c.commit(); pid=cur.lastrowid; c.close()
     return jsonify(ok=True,id=pid),201
 
 @app.put('/api/fashion/admin/products/<int:pid>')
 def fashion_admin_product_update(pid):
     err=require_admin()
     if err:return err
-    b=request.get_json(silent=True) or {}
-    name=str(b.get('name','')).strip(); category=str(b.get('category','1 Piece')).strip()
+    b=request.get_json(silent=True) or {}; name=str(b.get('name','')).strip(); category=str(b.get('category','1 Piece')).strip()
     try: price=float(b.get('price',0)); old=float(b.get('old_price',0) or 0); stock=int(b.get('stock',0) or 0)
     except (TypeError,ValueError): return jsonify(error='invalid_number'),400
     if not name or price <= 0 or stock < 0:return jsonify(error='invalid_product'),400
-    now=int(time.time()); c=fdb(); cur=c.execute('UPDATE products SET name=?,category=?,price=?,old_price=?,image=?,stock=?,description=?,updated_at=? WHERE id=?',(name,category,price,old,str(b.get('image','')).strip(),stock,str(b.get('description','')).strip(),now,pid)); c.commit(); c.close()
+    gallery,image=clean_gallery(b); now=int(time.time()); c=fdb()
+    cur=c.execute('UPDATE products SET name=?,category=?,price=?,old_price=?,image=?,image_url=?,gallery=?,stock=?,description=?,updated_at=? WHERE id=?',(name,category,price,old,image,image,json.dumps(gallery,ensure_ascii=False),stock,str(b.get('description','')).strip(),now,pid)); c.commit(); c.close()
     if cur.rowcount != 1:return jsonify(error='not_found'),404
     return jsonify(ok=True)
 
@@ -162,8 +162,7 @@ def fashion_admin_product_delete(pid):
 
 @app.post('/api/fashion/orders')
 def fashion_create_order():
-    b=request.get_json(silent=True) or {}
-    customer=str(b.get('customer','')).strip(); phone=str(b.get('phone','')).strip(); address=str(b.get('address','')).strip(); raw=b.get('items') or []
+    b=request.get_json(silent=True) or {}; customer=str(b.get('customer','')).strip(); phone=str(b.get('phone','')).strip(); address=str(b.get('address','')).strip(); raw=b.get('items') or []
     if not customer or not phone or not address or not isinstance(raw,list) or not raw:return jsonify(error='customer_phone_address_items_required'),400
     c=fdb()
     try:
@@ -173,14 +172,12 @@ def fashion_create_order():
             if qty < 1 or qty > 50: raise ValueError('invalid_qty')
             p=c.execute('SELECT id,name,price,stock,active FROM products WHERE id=?',(pid,)).fetchone()
             if not p or not p['active'] or p['stock'] < qty: raise ValueError('stock_unavailable')
-            line=round(float(p['price'])*qty,2); total += line
-            clean.append({'id':p['id'],'name':p['name'],'price':float(p['price']),'qty':qty,'line_total':line})
+            line=round(float(p['price'])*qty,2); total += line; clean.append({'id':p['id'],'name':p['name'],'price':float(p['price']),'qty':qty,'line_total':line})
         now=int(time.time())
         for item in clean:
             cur=c.execute('UPDATE products SET stock=stock-?,updated_at=? WHERE id=? AND stock>=?',(item['qty'],now,item['id'],item['qty']))
             if cur.rowcount != 1: raise ValueError('stock_changed')
-        cur=c.execute('INSERT INTO orders(customer,phone,address,items,total,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)',(customer,phone,address,json.dumps(clean,ensure_ascii=False),round(total,2),'Pending',now,now))
-        c.commit(); oid=cur.lastrowid
+        cur=c.execute('INSERT INTO orders(customer,phone,address,items,total,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)',(customer,phone,address,json.dumps(clean,ensure_ascii=False),round(total,2),'Pending',now,now)); c.commit(); oid=cur.lastrowid
     except ValueError as e:
         c.rollback(); c.close(); return jsonify(error=str(e)),409
     except Exception:
@@ -191,8 +188,7 @@ def fashion_create_order():
 def fashion_admin_orders():
     err=require_admin()
     if err:return err
-    c=fdb(); rows=c.execute('SELECT * FROM orders ORDER BY id DESC LIMIT 500').fetchall(); c.close()
-    out=[]
+    c=fdb(); rows=c.execute('SELECT * FROM orders ORDER BY id DESC LIMIT 500').fetchall(); c.close(); out=[]
     for r in rows:
         d=dict(r)
         try:d['items']=json.loads(d['items'])
