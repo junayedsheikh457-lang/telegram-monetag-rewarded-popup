@@ -90,7 +90,7 @@ def _save_product(pid=None):
   try:
    c=db()
    if pid is None:
-    c.execute('INSERT INTO products(name,category,price,old_price,image_url,gallery,description,stock,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)',vals+(now,)); pid=c.lastrowid
+    cur=c.execute('INSERT INTO products(name,category,price,old_price,image_url,gallery,description,stock,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)',vals+(now,)); pid=cur.lastrowid
    else:
     c.execute('UPDATE products SET name=?,category=?,price=?,old_price=?,image_url=?,gallery=?,description=?,stock=?,updated_at=? WHERE id=?',vals+(pid,))
    c.commit(); c.close(); return jsonify(ok=True,id=pid)
@@ -118,15 +118,15 @@ def _delete_product(pid):
    if 'locked' not in str(e).lower() or attempt==4: raise
    time.sleep(0.5*(attempt+1))
  return jsonify(error='database_locked'),503
-@app.delete('/api/admin/products/<int:pid>')
-def delete_product(pid): return _delete_product(pid)
-@app.delete('/api/fashion/admin/products/<int:pid>')
-def fashion_delete_product(pid): return _delete_product(pid)
 def _orders():
  c=db(); rows=c.execute('SELECT * FROM orders ORDER BY id DESC').fetchall(); c.close(); out=[]
  for r in rows:
   x=dict(r); x['items']=json.loads(x['items']); x['customer']=x['customer_name']; out.append(x)
  return out
+@app.delete('/api/admin/products/<int:pid>')
+def delete_product(pid): return _delete_product(pid)
+@app.delete('/api/fashion/admin/products/<int:pid>')
+def fashion_delete_product(pid): return _delete_product(pid)
 @app.get('/api/admin/orders')
 def admin_orders():
  if not admin_ok(): return jsonify(error='unauthorized'),401
