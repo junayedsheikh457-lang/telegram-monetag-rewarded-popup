@@ -1,0 +1,139 @@
+name: LUXERA Home Redesign
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  redesign:
+    if: "!contains(github.event.head_commit.message, '[home-redesign]')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Apply premium home styling
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('fashion/index.html')
+          s = p.read_text(encoding='utf-8')
+          marker = '<style id="luxera-home-redesign">'
+          if marker in s:
+              raise SystemExit(0)
+          css = r'''<style id="luxera-home-redesign">
+          /* Premium LUXERA home-page refresh */
+          body{background:#050505;color:#f8f3ea}
+          .wrap{max-width:1180px;padding-left:18px;padding-right:18px}
+          .nav{height:70px;background:rgba(5,5,5,.97);border-bottom:1px solid #76551c;backdrop-filter:blur(10px)}
+          .navin{gap:14px}
+          .menu{font-size:27px;color:#f4d16c;width:38px}
+          .brand{font-size:29px;letter-spacing:4px;text-shadow:0 0 18px #8b641d66}
+          .brand small{font-size:6px;letter-spacing:4px;margin-top:2px}
+          .search{width:42px;font-size:0}
+          .search:after{font-size:26px;color:#f4d16c}
+          .icon{font-size:26px}
+          .badge{right:-6px;top:-6px;font-size:9px;min-width:16px;text-align:center}
+          .hero{padding-top:16px}
+          .heroBox{height:330px;border:1px solid #9a6f20;border-radius:20px;box-shadow:0 12px 40px #000;}
+          .heroBox img{object-position:center 25%;filter:saturate(.9)}
+          .shade{background:linear-gradient(90deg,rgba(3,3,3,.96) 0%,rgba(3,3,3,.84) 30%,rgba(3,3,3,.18) 72%,rgba(3,3,3,.05) 100%)}
+          .heroText{left:32px;width:48%}
+          .ey{font-size:10px;letter-spacing:3px;color:#f8d77b}
+          .heroText h1{font-size:43px;line-height:1.04;margin:12px 0}
+          .heroText p{font-size:12px;line-height:1.5;color:#ddd;max-width:330px;margin-bottom:16px}
+          .cta{background:#ef3978;border-radius:9px;padding:11px 18px;font-size:11px;box-shadow:0 8px 22px #ef397844}
+          .dots{padding:10px}
+          .dot{width:8px;height:8px}
+          .dot.on{width:24px;border-radius:8px}
+          section{padding:18px 0}
+          .head{margin-bottom:12px}
+          .head h2{font-size:24px;letter-spacing:.2px}
+          .view{font-size:11px}
+          .cats{gap:9px}
+          .cat{height:92px;border-radius:13px;background:linear-gradient(145deg,#151515,#0b0b0b);border:1px solid #5d451d;box-shadow:inset 0 0 18px #000}
+          .cat i{font-size:26px;margin:16px 0 7px;color:#ff6398}
+          .cat span{font-size:10px}
+          .benefits{margin:6px 0 10px;border-radius:14px;background:#0d0d0d}
+          .benefit{padding:14px 4px}
+          .benefit b{font-size:21px}
+          .benefit strong{font-size:9px;margin-top:4px}
+          .benefit small{font-size:6px}
+          .grid{gap:10px}
+          .card{border-radius:12px;border-color:#5d451d;background:#101010;box-shadow:0 8px 22px #0008}
+          .photo{height:230px}
+          .tag{left:7px;top:7px;font-size:8px;padding:4px 6px}
+          .heart{right:6px;top:5px;font-size:21px;border-radius:50%;padding:2px 5px}
+          .info{padding:9px}
+          .name{font-size:10px;min-height:29px;line-height:1.35}
+          .price{font-size:15px;font-weight:700}
+          .old{font-size:8px}
+          .add{font-size:9px;padding:8px;margin-top:7px;border-radius:8px}
+          .offer{min-height:180px;border-radius:18px;padding:22px;background:radial-gradient(circle at 78% 40%,#4a2f0d 0,#161006 25%,#080808 64%);overflow:hidden;position:relative}
+          .offer:after{content:'LUXÉRA';position:absolute;right:-12px;bottom:-18px;font:80px Georgia;color:#f4d16c12;letter-spacing:8px;transform:rotate(-12deg)}
+          .offer h2{font-size:28px;margin:8px 0}
+          .offer p{font-size:9px;margin-bottom:13px}
+          .offerBadge{width:90px;height:90px;font-size:29px;border:1px solid #c08a29;box-shadow:0 0 35px #c08a2933}
+          .bottom{height:64px;background:rgba(5,5,5,.98);border-top:1px solid #76551c;backdrop-filter:blur(12px)}
+          .bottom button{font-size:8px}
+          .bottom b{font-size:21px}
+          .bottom .center{width:56px;height:56px}
+          @media(max-width:700px){
+            body{padding-bottom:70px}
+            .wrap{padding-left:12px;padding-right:12px}
+            .nav{height:62px}
+            .navin{gap:8px}
+            .menu{font-size:23px;width:31px}
+            .brand{font-size:23px;letter-spacing:3px}
+            .brand small{font-size:5px;letter-spacing:2.5px}
+            .icon{font-size:22px}
+            .hero{padding-top:10px}
+            .heroBox{height:260px;border-radius:17px}
+            .heroText{left:20px;width:64%}
+            .ey{font-size:8px;letter-spacing:2.2px}
+            .heroText h1{font-size:31px;line-height:1.03;margin:8px 0}
+            .heroText p{font-size:9px;margin-bottom:11px;line-height:1.35}
+            .cta{padding:9px 13px;font-size:9px}
+            section{padding:13px 0}
+            .head h2{font-size:19px}
+            .cats{gap:6px}
+            .cat{height:74px;border-radius:10px}
+            .cat i{font-size:20px;margin:10px 0 5px}
+            .cat span{font-size:7px}
+            .benefits{border-radius:10px}
+            .benefit{padding:9px 1px}
+            .benefit b{font-size:17px}
+            .benefit strong{font-size:7px}
+            .benefit small{font-size:5px}
+            .grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+            .photo{height:190px}
+            .name{font-size:9px;min-height:25px}
+            .price{font-size:13px}
+            .old{font-size:7px}
+            .add{font-size:8px;padding:7px}
+            .offer{min-height:145px;padding:16px;border-radius:14px}
+            .offer h2{font-size:22px}
+            .offer p{font-size:7px}
+            .offerBadge{width:72px;height:72px;font-size:23px}
+          }
+          @media(min-width:1201px){
+            .heroBox{height:500px}
+            .heroText{left:55px}
+            .heroText h1{font-size:66px}
+            .photo{height:360px}
+          }
+          </style>'''
+          s = s.replace('</head>', css + '</head>', 1)
+          p.write_text(s, encoding='utf-8')
+          PY
+
+      - name: Commit redesign
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add fashion/index.html
+          git diff --cached --quiet && exit 0
+          git commit -m "Apply LUXERA premium home redesign [home-redesign]"
+          git push
