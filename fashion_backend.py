@@ -40,6 +40,16 @@ def init_fashion_db():
     CREATE INDEX IF NOT EXISTS idx_products_active ON products(active, category);
     CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status, created_at);
     ''')
+    # The main app's fashion admin routes use image_url + gallery. Older fashion
+    # databases were created with only image, so migrate them before requests.
+    columns = {row['name'] for row in c.execute('PRAGMA table_info(products)').fetchall()}
+    if 'image_url' not in columns:
+        c.execute("ALTER TABLE products ADD COLUMN image_url TEXT DEFAULT ''")
+    if 'gallery' not in columns:
+        c.execute("ALTER TABLE products ADD COLUMN gallery TEXT DEFAULT '[]'")
+    if 'image' in columns:
+        c.execute("UPDATE products SET image_url=COALESCE(NULLIF(image_url,''), image) WHERE image_url IS NULL OR image_url='' OR image_url=''")
+    c.execute("UPDATE products SET gallery=json_array(image_url) WHERE (gallery IS NULL OR gallery='' OR gallery='[]') AND image_url IS NOT NULL AND image_url!=''")
     if c.execute('SELECT COUNT(*) AS n FROM products').fetchone()['n'] == 0:
         now = int(time.time())
         seed = [
