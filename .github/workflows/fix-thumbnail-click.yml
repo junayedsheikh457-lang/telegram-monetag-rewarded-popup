@@ -1,0 +1,32 @@
+name: Fix thumbnail click behavior
+on:
+  push:
+    paths:
+      - 'fashion/index.html'
+permissions:
+  contents: write
+jobs:
+  patch:
+    if: ${{ !startsWith(github.event.head_commit.message, 'Fix thumbnail zoom behavior') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch thumbnail behavior
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('fashion/index.html')
+          s=p.read_text()
+          old='m.querySelectorAll(\'.thumb\').forEach((b,i)=>b.onclick=()=>openZoom(i))'
+          new='m.querySelectorAll(\'.thumb\').forEach((b,i)=>b.onclick=()=>setImage(i))'
+          if old not in s:
+              raise SystemExit('target text not found')
+          p.write_text(s.replace(old,new,1))
+          PY
+      - name: Commit patch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add fashion/index.html
+          git commit -m 'Fix thumbnail zoom behavior' || exit 0
+          git push
