@@ -1,28 +1,30 @@
 (function(){
-  var arranging=false;
   function arrange(){
-    if(arranging) return false;
     var grid=document.querySelector('.grid');
     if(!grid) return false;
-    var cards=[].slice.call(grid.querySelectorAll('.card'));
+    var cards=[].slice.call(grid.querySelectorAll(':scope > .card'));
     if(cards.length<4) return false;
     var order=['Embroidered A-Line Dress','Lace Detail Co-ord Set','Printed Oversized Shirt','Floral Midi Dress'];
     function name(c){var e=c.querySelector('.name');return e?e.textContent.replace(/\s+/g,' ').trim():''}
-    arranging=true;
-    cards.sort(function(a,b){var ai=order.indexOf(name(a)),bi=order.indexOf(name(b));ai=ai<0?999:ai;bi=bi<0?999:bi;return ai-bi});
+    cards.sort(function(a,b){
+      var ai=order.indexOf(name(a)),bi=order.indexOf(name(b));
+      ai=ai<0?999:ai;bi=bi<0?999:bi;
+      return ai-bi;
+    });
+    var first=cards.slice(0,4),rest=cards.slice(4);
+    first.forEach(function(c){grid.appendChild(c)});
     var offer=document.querySelector('.offer');
-    if(!offer){arranging=false;return true;}
+    if(!offer) return true;
     var more=document.getElementById('luxeraMoreProducts');
     if(!more){
-      more=document.createElement('section');more.id='luxeraMoreProducts';more.className='luxera-more';
+      more=document.createElement('section');
+      more.id='luxeraMoreProducts';
+      more.className='luxera-more';
       more.innerHTML='<div class="head"><h2>More Products</h2><span class="view">View All</span></div><div class="grid luxera-more-grid"></div>';
       offer.parentNode.insertBefore(more,offer.nextSibling);
     }
     var mg=more.querySelector('.luxera-more-grid');
-    cards.forEach(function(c){grid.appendChild(c)});
-    cards.slice(4).forEach(function(c){mg.appendChild(c)});
-    grid.style.display='grid';
-    arranging=false;
+    rest.forEach(function(c){mg.appendChild(c)});
     return true;
   }
 
@@ -43,10 +45,11 @@
     related.forEach(function(originalCard){
       var card=originalCard.cloneNode(true);
       card.classList.add('detail-related-card');
+      card.removeAttribute('onclick');
       card.addEventListener('click',function(e){
         if(e.target.closest('.heart,.add')) return;
         var m=(originalCard.getAttribute('onclick')||'').match(/detail\((\d+)\)/);
-        if(m) window.detail(Number(m[1]));
+        if(m && typeof window.detail==='function') window.detail(Number(m[1]));
       });
       var addBtn=card.querySelector('.add');
       if(addBtn){
@@ -78,8 +81,7 @@
     window.detail=function(id){
       original(id);
       setTimeout(function(){
-        var modals=[].slice.call(document.querySelectorAll('.modal.show'));
-        var modal=modals[modals.length-1];
+        var modal=document.querySelector('.modal.show:last-of-type') || document.querySelector('.modal.show');
         addRelatedProducts(modal,id);
       },80);
     };
@@ -88,13 +90,12 @@
   }
 
   function start(){
-    var tries=0;
-    var t=setInterval(function(){
-      tries++;
-      var arranged=arrange();
-      var hooked=hookDetail();
-      if((arranged&&hooked)||tries>30) clearInterval(t);
-    },300);
+    arrange();
+    hookDetail();
+    setTimeout(arrange,500);
+    setTimeout(arrange,1500);
+    setTimeout(hookDetail,500);
+    setTimeout(hookDetail,1500);
   }
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start);else start();
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',start); else start();
 })();
