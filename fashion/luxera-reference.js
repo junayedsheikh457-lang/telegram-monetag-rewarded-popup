@@ -27,20 +27,43 @@
   function addRelatedProducts(modal,currentId){
     if(!modal || modal.querySelector('.detail-related')) return;
     var box=modal.querySelector('.box');
-    if(!box || !Array.isArray(window.products)) return;
-    var related=window.products.filter(function(p){return Number(p.id)!==Number(currentId)}).slice(0,8);
+    if(!box) return;
+    var all=[].slice.call(document.querySelectorAll('#grid .card, #luxeraMoreProducts .card'));
+    var related=all.filter(function(c){
+      var m=(c.getAttribute('onclick')||'').match(/detail\((\d+)\)/);
+      return m && Number(m[1])!==Number(currentId);
+    }).slice(0,8);
     if(!related.length) return;
     var sec=document.createElement('section');
     sec.className='detail-related';
     sec.innerHTML='<div class="head"><h2>You May Also Like</h2><span class="view">More</span></div><div class="detail-related-grid"></div>';
     var rg=sec.querySelector('.detail-related-grid');
-    related.forEach(function(p){
-      var off=p.old_price>p.price?Math.round((1-p.price/p.old_price)*100):0;
-      var card=document.createElement('article');
-      card.className='card detail-related-card';
-      card.innerHTML='<div class="photo"><img src="'+p.image+'"><span class="tag">'+(off?'-'+off+'%':'NEW')+'</span></div><div class="info"><div class="name">'+String(p.name||'').replace(/[&<>\"']/g,function(x){return {'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[x]})+'</div><span class="price">৳'+Number(p.price||0).toLocaleString()+'</span>'+(p.old_price?'<span class="old">৳'+Number(p.old_price).toLocaleString()+'</span>':'')+'<button class="add">🛒 Add to Cart</button></div>';
-      card.addEventListener('click',function(){window.detail(Number(p.id))});
-      card.querySelector('.add').addEventListener('click',function(e){e.stopPropagation();window.add(Number(p.id))});
+    related.forEach(function(originalCard){
+      var card=originalCard.cloneNode(true);
+      card.classList.add('detail-related-card');
+      card.addEventListener('click',function(e){
+        if(e.target.closest('.heart,.add')) return;
+        var m=(originalCard.getAttribute('onclick')||'').match(/detail\((\d+)\)/);
+        if(m) window.detail(Number(m[1]));
+      });
+      var addBtn=card.querySelector('.add');
+      if(addBtn){
+        addBtn.removeAttribute('onclick');
+        addBtn.addEventListener('click',function(e){
+          e.stopPropagation();
+          var m=(originalCard.innerHTML.match(/add\((\d+)\)/)||[])[1];
+          if(m && typeof window.add==='function') window.add(Number(m));
+        });
+      }
+      var heart=card.querySelector('.heart');
+      if(heart){
+        heart.removeAttribute('onclick');
+        heart.addEventListener('click',function(e){
+          e.stopPropagation();
+          var m=(originalCard.innerHTML.match(/toggleWish\((\d+)\)/)||[])[1];
+          if(m && typeof window.toggleWish==='function') window.toggleWish(Number(m));
+        });
+      }
       rg.appendChild(card);
     });
     box.appendChild(sec);
@@ -56,7 +79,7 @@
         var modals=[].slice.call(document.querySelectorAll('.modal.show'));
         var modal=modals[modals.length-1];
         addRelatedProducts(modal,id);
-      },0);
+      },30);
     };
     window.__luxeraDetailHooked=true;
     return true;
