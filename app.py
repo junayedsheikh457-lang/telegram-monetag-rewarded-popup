@@ -8,21 +8,14 @@ BOT_TOKEN=os.getenv('BOT_TOKEN','').strip(); ADMIN_PASSWORD=os.getenv('ADMIN_PAS
 app=Flask(__name__,static_folder='miniapp')
 @app.after_request
 def cors(response):
- response.headers['Access-Control-Allow-Origin']='*'
- response.headers['Access-Control-Allow-Headers']='Content-Type, X-Admin-Password'
- response.headers['Access-Control-Allow-Methods']='GET,POST,PUT,DELETE,OPTIONS'
- return response
+ response.headers['Access-Control-Allow-Origin']='*'; response.headers['Access-Control-Allow-Headers']='Content-Type, X-Admin-Password'; response.headers['Access-Control-Allow-Methods']='GET,POST,PUT,DELETE,OPTIONS'; return response
 def db():
- c=sqlite3.connect(DB_PATH,timeout=60)
- c.row_factory=sqlite3.Row
- c.execute('PRAGMA busy_timeout=60000')
+ c=sqlite3.connect(DB_PATH,timeout=60); c.row_factory=sqlite3.Row; c.execute('PRAGMA busy_timeout=60000')
  try: c.execute('PRAGMA journal_mode=WAL')
  except sqlite3.OperationalError: pass
- c.execute('PRAGMA synchronous=NORMAL')
- return c
+ c.execute('PRAGMA synchronous=NORMAL'); return c
 def init_db():
- c=db()
- c.executescript('''CREATE TABLE IF NOT EXISTS products(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT NOT NULL,category TEXT,price REAL NOT NULL,old_price REAL,image_url TEXT,description TEXT,stock INTEGER NOT NULL DEFAULT 0,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL);CREATE TABLE IF NOT EXISTS orders(id INTEGER PRIMARY KEY AUTOINCREMENT,customer_name TEXT NOT NULL,phone TEXT NOT NULL,address TEXT NOT NULL,items TEXT NOT NULL,total REAL NOT NULL,status TEXT NOT NULL DEFAULT 'Pending',created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL);CREATE TABLE IF NOT EXISTS users(telegram_id TEXT PRIMARY KEY,username TEXT,first_name TEXT,balance REAL NOT NULL DEFAULT 0,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL);CREATE TABLE IF NOT EXISTS rewards(id INTEGER PRIMARY KEY AUTOINCREMENT,telegram_id TEXT NOT NULL,amount REAL NOT NULL,event_id TEXT UNIQUE,source TEXT NOT NULL,created_at INTEGER NOT NULL);''')
+ c=db(); c.executescript('''CREATE TABLE IF NOT EXISTS products(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT NOT NULL,category TEXT,price REAL NOT NULL,old_price REAL,image_url TEXT,description TEXT,stock INTEGER NOT NULL DEFAULT 0,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL);CREATE TABLE IF NOT EXISTS orders(id INTEGER PRIMARY KEY AUTOINCREMENT,customer_name TEXT NOT NULL,phone TEXT NOT NULL,address TEXT NOT NULL,items TEXT NOT NULL,total REAL NOT NULL,status TEXT NOT NULL DEFAULT 'Pending',created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL);CREATE TABLE IF NOT EXISTS users(telegram_id TEXT PRIMARY KEY,username TEXT,first_name TEXT,balance REAL NOT NULL DEFAULT 0,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL);CREATE TABLE IF NOT EXISTS rewards(id INTEGER PRIMARY KEY AUTOINCREMENT,telegram_id TEXT NOT NULL,amount REAL NOT NULL,event_id TEXT UNIQUE,source TEXT NOT NULL,created_at INTEGER NOT NULL);''')
  try: c.execute("ALTER TABLE products ADD COLUMN gallery TEXT DEFAULT '[]'")
  except sqlite3.OperationalError: pass
  c.commit(); c.close()
@@ -50,9 +43,35 @@ def fashion_products():
 def fashion_product(pid):
  c=db(); r=c.execute('SELECT * FROM products WHERE id=?',(pid,)).fetchone(); c.close(); return (jsonify(product=product_dict(r)) if r else (jsonify(error='not_found'),404))
 def _create_order():
- b=request.get_json(silent=True) or {}; name=str(b.get('customer_name','')).strip(); phone=str(b.get('phone','')).strip(); address=str(b.get('address','')).strip(); items=b.get('items',[]); total=float(b.get('total',0))
- if not name or not phone or not address or not isinstance(items,list) or not items:return jsonify(ok=False,error='missing_order_data'),400
- now=int(time.time()); c=db(); c.execute('INSERT INTO orders(customer_name,phone,address,items,total,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)',(name,phone,address,json.dumps(items,ensure_ascii=False),'%.2f'%total,'Pending',now,now)); oid=c.lastrowid; c.commit(); c.close(); return jsonify(ok=True,order_id=oid)
+ b=request.get_json(silent=True) or {}
+ name=str(b.get('customer_name') or b.get('customer') or b.get('name') or '').strip()
+ phone=str(b.get('phone') or b.get('customer_phone') or '').strip()
+ address=str(b.get('address') or b.get('customer_address') or '').strip()
+ raw_items=b.get('items',[])
+ if not name or not phone or not address or not isinstance(raw_items,list) or not raw_items:
+  return jsonify(ok=False,error='missing_order_data',missing=[k for k,v in [('name',name),('phone',phone),('address',address),('items',raw_items)] if not v]),400
+ c=db(); enriched=[]; calculated=0.0
+ try:
+  for item in raw_items:
+   if not isinstance(item,dict): continue
+   pid=item.get('id'); qty=max(1,int(item.get('qty',1) or 1)); row=None
+   try: row=c.execute('SELECT * FROM products WHERE id=?',(int(pid),)).fetchone() if pid is not None else None
+   except (TypeError,ValueError): row=None
+   if row:
+    p=product_dict(row); price=float(p.get('price') or 0); subtotal=price*qty; calculated+=subtotal
+    enriched.append({'id':int(p['id']),'name':p['name'],'category':p.get('category',''),'price':price,'qty':qty,'subtotal':subtotal,'image':p.get('image','')})
+   else:
+    price=float(item.get('price') or 0); subtotal=price*qty; calculated+=subtotal
+    enriched.append({'id':pid,'name':str(item.get('name') or 'Product'),'category':str(item.get('category') or ''),'price':price,'qty':qty,'subtotal':subtotal,'image':str(item.get('image') or '')})
+  if not enriched: return jsonify(ok=False,error='invalid_order_items'),400
+  supplied=b.get('total'); total=float(supplied) if supplied is not None else calculated
+  if total<=0: total=calculated
+  now=int(time.time())
+  cur=c.execute('INSERT INTO orders(customer_name,phone,address,items,total,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)',(name,phone,address,json.dumps(enriched,ensure_ascii=False),'%.2f'%total,'Pending',now,now)); oid=cur.lastrowid; c.commit()
+  return jsonify(ok=True,order_id=oid,total=total,customer={'name':name,'phone':phone,'address':address},items=enriched)
+ except Exception:
+  c.rollback(); raise
+ finally: c.close()
 @app.post('/api/orders')
 def create_order(): return _create_order()
 @app.post('/api/fashion/orders')
@@ -91,9 +110,18 @@ def _save_product(pid=None):
    c=db()
    if pid is None:
     cur=c.execute('INSERT INTO products(name,category,price,old_price,image_url,gallery,description,stock,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)',vals+(now,)); pid=cur.lastrowid
-   else:
-    c.execute('UPDATE products SET name=?,category=?,price=?,old_price=?,image_url=?,gallery=?,description=?,stock=?,updated_at=? WHERE id=?',vals+(pid,))
+   else:c.execute('UPDATE products SET name=?,category=?,price=?,old_price=?,image_url=?,gallery=?,description=?,stock=?,updated_at=? WHERE id=?',vals+(pid,))
    c.commit(); c.close(); return jsonify(ok=True,id=pid)
+  except sqlite3.OperationalError as e:
+   if c: c.rollback(); c.close()
+   if 'locked' not in str(e).lower() or attempt==4: raise
+   time.sleep(0.5*(attempt+1))
+ return jsonify(error='database_locked'),503
+def _delete_product(pid):
+ if not admin_ok(): return jsonify(error='unauthorized'),401
+ for attempt in range(5):
+  c=None
+  try:c=db(); c.execute('DELETE FROM products WHERE id=?',(pid,)); c.commit(); c.close(); return jsonify(ok=True)
   except sqlite3.OperationalError as e:
    if c: c.rollback(); c.close()
    if 'locked' not in str(e).lower() or attempt==4: raise
@@ -107,26 +135,15 @@ def fashion_add_product(): return _save_product()
 def edit_product(pid): return _save_product(pid)
 @app.put('/api/fashion/admin/products/<int:pid>')
 def fashion_edit_product(pid): return _save_product(pid)
-def _delete_product(pid):
- if not admin_ok(): return jsonify(error='unauthorized'),401
- for attempt in range(5):
-  c=None
-  try:
-   c=db(); c.execute('DELETE FROM products WHERE id=?',(pid,)); c.commit(); c.close(); return jsonify(ok=True)
-  except sqlite3.OperationalError as e:
-   if c: c.rollback(); c.close()
-   if 'locked' not in str(e).lower() or attempt==4: raise
-   time.sleep(0.5*(attempt+1))
- return jsonify(error='database_locked'),503
-def _orders():
- c=db(); rows=c.execute('SELECT * FROM orders ORDER BY id DESC').fetchall(); c.close(); out=[]
- for r in rows:
-  x=dict(r); x['items']=json.loads(x['items']); x['customer']=x['customer_name']; out.append(x)
- return out
 @app.delete('/api/admin/products/<int:pid>')
 def delete_product(pid): return _delete_product(pid)
 @app.delete('/api/fashion/admin/products/<int:pid>')
 def fashion_delete_product(pid): return _delete_product(pid)
+def _orders():
+ c=db(); rows=c.execute('SELECT * FROM orders ORDER BY id DESC').fetchall(); c.close(); out=[]
+ for r in rows:
+  x=dict(r); x['items']=json.loads(x['items']); x['customer']=x['customer_name']; x['customer_details']={'name':x['customer_name'],'phone':x['phone'],'address':x['address']}; out.append(x)
+ return out
 @app.get('/api/admin/orders')
 def admin_orders():
  if not admin_ok(): return jsonify(error='unauthorized'),401
@@ -141,8 +158,7 @@ def _update_order(oid):
  if status not in allowed:return jsonify(error='invalid_status'),400
  for attempt in range(5):
   c=None
-  try:
-   c=db(); c.execute('UPDATE orders SET status=?,updated_at=? WHERE id=?',(status,int(time.time()),oid)); c.commit(); c.close(); return jsonify(ok=True)
+  try:c=db(); c.execute('UPDATE orders SET status=?,updated_at=? WHERE id=?',(status,int(time.time()),oid)); c.commit(); c.close(); return jsonify(ok=True)
   except sqlite3.OperationalError as e:
    if c: c.rollback(); c.close()
    if 'locked' not in str(e).lower() or attempt==4: raise
