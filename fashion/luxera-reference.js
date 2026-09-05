@@ -1,16 +1,17 @@
 (function(){
+  var arranging=false;
   function arrange(){
+    if(arranging) return false;
     var grid=document.querySelector('.grid');
     if(!grid) return false;
     var cards=[].slice.call(grid.querySelectorAll('.card'));
     if(cards.length<4) return false;
     var order=['Embroidered A-Line Dress','Lace Detail Co-ord Set','Printed Oversized Shirt','Floral Midi Dress'];
     function name(c){var e=c.querySelector('.name');return e?e.textContent.replace(/\s+/g,' ').trim():''}
+    arranging=true;
     cards.sort(function(a,b){var ai=order.indexOf(name(a)),bi=order.indexOf(name(b));ai=ai<0?999:ai;bi=bi<0?999:bi;return ai-bi});
-    cards.forEach(function(c){grid.appendChild(c)});
-    var first=cards.slice(0,4), rest=cards.slice(4);
     var offer=document.querySelector('.offer');
-    if(!offer) return true;
+    if(!offer){arranging=false;return true;}
     var more=document.getElementById('luxeraMoreProducts');
     if(!more){
       more=document.createElement('section');more.id='luxeraMoreProducts';more.className='luxera-more';
@@ -18,9 +19,10 @@
       offer.parentNode.insertBefore(more,offer.nextSibling);
     }
     var mg=more.querySelector('.luxera-more-grid');
-    first.forEach(function(c){grid.appendChild(c)});
-    rest.forEach(function(c){mg.appendChild(c)});
+    cards.forEach(function(c){grid.appendChild(c)});
+    cards.slice(4).forEach(function(c){mg.appendChild(c)});
     grid.style.display='grid';
+    arranging=false;
     return true;
   }
 
@@ -79,23 +81,20 @@
         var modals=[].slice.call(document.querySelectorAll('.modal.show'));
         var modal=modals[modals.length-1];
         addRelatedProducts(modal,id);
-      },30);
+      },80);
     };
     window.__luxeraDetailHooked=true;
     return true;
   }
 
   function start(){
-    var tries=0, t=setInterval(function(){
+    var tries=0;
+    var t=setInterval(function(){
       tries++;
       var arranged=arrange();
       var hooked=hookDetail();
-      if((arranged||hooked)&&tries>2 || tries>30)clearInterval(t);
-    },250);
-    var obs=new MutationObserver(function(){arrange()});
-    var root=document.querySelector('.grid')||document.body;
-    obs.observe(root,{childList:true,subtree:true});
-    setTimeout(function(){obs.disconnect()},12000);
+      if((arranged&&hooked)||tries>30) clearInterval(t);
+    },300);
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start);else start();
 })();
