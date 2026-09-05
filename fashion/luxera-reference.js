@@ -29,17 +29,24 @@
     window.order=function(){
       var customer=(document.getElementById('customer')?.value||'').trim(),phone=(document.getElementById('phone')?.value||'').trim(),address=(document.getElementById('address')?.value||'').trim();
       var msg=document.getElementById('msg');if(!customer||!phone||!address){if(msg)msg.textContent='সব তথ্য পূরণ করুন।';return}
-      if(!Array.isArray(window.cart)||!window.cart.length){if(msg)msg.textContent='Cart খালি।';return}
+      if(!Array.isArray(cart)||!cart.length){if(msg)msg.textContent='Cart খালি।';return}
       if(msg)msg.textContent='Order পাঠানো হচ্ছে...';
-      var items=window.cart.map(function(x){return{id:x.id,name:x.name||'Product',category:x.category||'',price:Number(x.price||0),qty:Number(x.qty||1),image:x.image||x.image_url||''}});
+      var items=cart.map(function(x){return{id:Number(x.id),name:x.name||'Product',category:x.category||'',price:Number(x.price||0),qty:Number(x.qty||1),image:x.image||x.image_url||''}});
       var total=items.reduce(function(s,x){return s+x.price*x.qty},0);
-      fetch((window.API||'https://telegram-monetag.onrender.com')+'/api/fashion/orders',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({customer_name:customer,customer:customer,name:customer,phone:phone,address:address,items:items,total:total})})
+      fetch(API+'/api/fashion/orders',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({customer_name:customer,customer:customer,name:customer,phone:phone,address:address,items:items,total:total})})
       .then(function(r){return r.json().then(function(j){if(!r.ok)throw Error(j.error||'Order failed');return j})})
-      .then(function(j){localStorage.luxAcc=JSON.stringify({name:customer,phone:phone,address:address});window.cart=[];if(typeof window.save==='function')window.save();if(typeof window.counts==='function')window.counts();if(msg)msg.textContent='✅ Order সফল! Order ID: #'+j.order_id;setTimeout(function(){if(typeof window.closeM==='function')window.closeM('checkout')},1800)})
+      .then(function(j){localStorage.luxAcc=JSON.stringify({name:customer,phone:phone,address:address});cart=[];save();counts();if(msg)msg.textContent='✅ Order সফল! Order ID: #'+j.order_id;setTimeout(function(){closeM('checkout')},1800)})
       .catch(function(e){if(msg)msg.textContent='❌ '+e.message});
     };
     window.__luxeraOrderFixed=true;return true;
   }
-  function start(){arrange();hookDetail();fixOrder();setTimeout(arrange,700);setTimeout(hookDetail,700);setTimeout(fixOrder,700);setTimeout(arrange,1700);setTimeout(hookDetail,1700);setTimeout(fixOrder,1700)}
+  function fixCart(){
+    try{
+      if(!Array.isArray(cart))cart=[];
+      cart=cart.filter(function(x){return x&&x.id!=null&&Number(x.qty)>0}).map(function(x){return Object.assign({},x,{id:Number(x.id),qty:Number(x.qty)||1,price:Number(x.price)||0})});
+      save();counts();
+    }catch(e){}
+  }
+  function start(){arrange();hookDetail();fixOrder();fixCart();setTimeout(arrange,700);setTimeout(hookDetail,700);setTimeout(fixOrder,700);setTimeout(fixCart,700);setTimeout(arrange,1700);setTimeout(hookDetail,1700);setTimeout(fixOrder,1700);setTimeout(fixCart,1700)}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start);else start();
 })();
