@@ -1,0 +1,30 @@
+name: Apply LUXERA reference layout
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    if: github.event.head_commit.message != 'Apply LUXERA reference patch [auto]'
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inject reference assets
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('fashion/index.html')
+          s=p.read_text(encoding='utf-8')
+          if 'luxera-reference.css' not in s:
+              s=s.replace('</head>','<link rel="stylesheet" href="luxera-reference.css"><script src="luxera-reference.js" defer></script></head>',1)
+          p.write_text(s,encoding='utf-8')
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add fashion/index.html
+          if git diff --cached --quiet; then echo 'No patch needed'; exit 0; fi
+          git commit -m 'Apply LUXERA reference patch [auto]'
+          git push
