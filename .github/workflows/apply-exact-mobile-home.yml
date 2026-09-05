@@ -1,0 +1,38 @@
+name: Apply LUXERA exact mobile home style
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  patch-home:
+    if: ${{ !contains(github.event.head_commit.message, '[exact-mobile-home]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inject reference stylesheet
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('fashion/index.html')
+          s = p.read_text(encoding='utf-8')
+          link = '<link rel="stylesheet" href="/luxera-exact-mobile.css">'
+          if link not in s:
+              marker = '</head>'
+              if marker in s:
+                  s = s.replace(marker, link + marker, 1)
+              else:
+                  s = link + s
+              p.write_text(s, encoding='utf-8')
+          PY
+      - name: Commit
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add fashion/index.html
+          git diff --cached --quiet && exit 0
+          git commit -m 'Apply exact LUXERA mobile home style [exact-mobile-home]'
+          git push
