@@ -1,5 +1,6 @@
 from app import app, init_db, setup_webhook, PORT
 from fashion_backend import init_fashion_db
+import fashion.customer_orders_api
 
 if __name__ == '__main__':
     init_db()
