@@ -1,47 +1,19 @@
-/* LUXÉRA homepage hero manager
-   Admin workflow: create/edit a product named __LUXERA_HERO__ from admin.html,
-   upload the image from the phone gallery, and save it. The product is hidden
-   from the storefront while its cover image is used as the homepage hero. */
 (function(){
   'use strict';
   var API='https://telegram-monetag.onrender.com';
-  var HERO_NAMES=['__LUXERA_HERO__','HOMEPAGE HERO','HERO IMAGE'];
-  function isHero(p){
-    var n=String((p&&p.name)||'').trim().toUpperCase();
-    return HERO_NAMES.indexOf(n)>=0;
-  }
-  function hideHeroCards(){
-    document.querySelectorAll('.card').forEach(function(card){
-      var name=card.querySelector('.name');
-      if(name && HERO_NAMES.indexOf(name.textContent.trim().toUpperCase())>=0){
-        card.style.display='none';
-      }
-    });
-  }
-  function applyHero(p){
-    if(!p)return;
-    var src=p.image_url||p.image||((Array.isArray(p.gallery)&&p.gallery[0])||'');
-    if(!src)return;
-    var img=document.getElementById('heroImg');
-    if(img){img.src=src;img.setAttribute('data-admin-hero','true');}
-    hideHeroCards();
-  }
-  function loadHero(){
-    fetch(API+'/api/fashion/products',{cache:'no-store'})
-      .then(function(r){return r.ok?r.json():Promise.reject(new Error('hero request failed'));})
-      .then(function(data){
-        var items=Array.isArray(data.items)?data.items:[];
-        var hero=items.find(isHero);
-        if(hero)applyHero(hero);
-        hideHeroCards();
-      })
-      .catch(function(){hideHeroCards();});
-  }
-  function boot(){
-    loadHero();
-    setTimeout(loadHero,900);
-    setTimeout(hideHeroCards,1400);
-    setTimeout(hideHeroCards,2600);
-  }
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();
+  var HERO='__LUXERA_HERO__';
+  function readCart(){try{var raw=JSON.parse(localStorage.getItem('luxCart')||'[]');if(!Array.isArray(raw))raw=[];return raw.filter(function(x){return x&&x.id!=null&&Number(x.qty)>0}).map(function(x){return Object.assign({},x,{id:Number(x.id),qty:Number(x.qty)||1,price:Number(x.price)||0})});}catch(e){return []}}
+  function syncCart(){var fresh=readCart();try{cart=fresh;localStorage.setItem('luxCart',JSON.stringify(fresh));}catch(e){}if(typeof counts==='function')counts();return fresh;}
+  function compactCartStyle(){if(document.getElementById('luxera-cart-fix'))return;var s=document.createElement('style');s.id='luxera-cart-fix';s.textContent='#cart .box{width:min(460px,calc(100vw - 20px));max-height:calc(100vh - 20px);overflow:hidden;padding:12px;border-radius:16px}#cart #cartBody{max-height:calc(100vh - 115px);overflow-y:auto}#cart .cartrow{grid-template-columns:48px minmax(0,1fr) auto;gap:7px;padding:6px 0}#cart .cartrow img{width:48px;height:56px;border-radius:6px}@media(max-width:700px){#cart .box{width:calc(100vw - 16px);max-height:calc(100vh - 16px)}}';document.head.appendChild(s);}
+  function hideHeroCards(){document.querySelectorAll('.card').forEach(function(card){var n=card.querySelector('.name');if(n&&n.textContent.trim().toUpperCase()===HERO)card.style.display='none';});}
+  function heroImages(p){var g=Array.isArray(p.gallery)?p.gallery:[];var a=g.filter(Boolean).slice(0,3);var first=p.image_url||p.image||'';if(first&&a.indexOf(first)<0)a.unshift(first);return a.slice(0,3);}
+  function setupHero(images){if(!images.length)return;var box=document.querySelector('.heroBox');var img=box&&box.querySelector('img');if(!box||!img)return;var dots=document.querySelector('.dots');var index=0,timer=null;function draw(){img.src=images[index];img.setAttribute('data-admin-hero','true');if(dots){dots.innerHTML=images.map(function(_,i){return '<span class="dot '+(i===index?'on':'')+'"></span>';}).join('');}}function next(){index=(index+1)%images.length;draw();}draw();if(timer)clearInterval(timer);if(images.length>1){timer=setInterval(next,5000);var startX=0;box.addEventListener('touchstart',function(e){startX=e.touches[0].clientX;},{passive:true});box.addEventListener('touchend',function(e){var dx=e.changedTouches[0].clientX-startX;if(Math.abs(dx)>35){index=(index+(dx<0?1:images.length-1))%images.length;draw();}},{passive:true});}}
+  function loadHero(){fetch(API+'/api/fashion/products',{cache:'no-store'}).then(function(r){return r.ok?r.json():Promise.reject(0)}).then(function(data){var p=(data.items||[]).find(function(x){return String(x.name||'').trim().toUpperCase()===HERO});if(p)setupHero(heroImages(p));hideHeroCards();}).catch(function(){hideHeroCards();});}
+  function arrange(){var grid=document.querySelector('.grid');if(!grid)return false;var cards=[].slice.call(grid.querySelectorAll(':scope > .card'));if(cards.length<4)return false;var order=['Embroidered A-Line Dress','Lace Detail Co-ord Set','Printed Oversized Shirt','Floral Midi Dress'];function name(c){var e=c.querySelector('.name');return e?e.textContent.replace(/\s+/g,' ').trim():''}cards.sort(function(a,b){var ai=order.indexOf(name(a)),bi=order.indexOf(name(b));ai=ai<0?999:ai;bi=bi<0?999:bi;return ai-bi});cards.slice(0,4).forEach(function(c){grid.appendChild(c)});var offer=document.querySelector('.offer');if(!offer)return true;var more=document.getElementById('luxeraMoreProducts');if(!more){more=document.createElement('section');more.id='luxeraMoreProducts';more.className='luxera-more';more.innerHTML='<div class="head"><h2>More Products</h2><span class="view">View All</span></div><div class="grid luxera-more-grid"></div>';offer.parentNode.insertBefore(more,offer.nextSibling)}var mg=more.querySelector('.luxera-more-grid');cards.slice(4).forEach(function(c){mg.appendChild(c)});return true;}
+  function addRelatedProducts(modal,currentId){if(!modal||modal.querySelector('.detail-related'))return;var box=modal.querySelector('.box');if(!box)return;var all=[].slice.call(document.querySelectorAll('#grid .card,#luxeraMoreProducts .card'));var related=all.filter(function(c){var m=(c.getAttribute('onclick')||'').match(/detail\((\d+)\)/);return m&&Number(m[1])!==Number(currentId)}).slice(0,8);if(!related.length)return;var sec=document.createElement('section');sec.className='detail-related';sec.innerHTML='<div class="head"><h2>You May Also Like</h2><span class="view">More</span></div><div class="detail-related-grid"></div>';var rg=sec.querySelector('.detail-related-grid');related.forEach(function(originalCard){var card=originalCard.cloneNode(true);card.classList.add('detail-related-card');card.removeAttribute('onclick');card.addEventListener('click',function(e){if(e.target.closest('.heart,.add'))return;var m=(originalCard.getAttribute('onclick')||'').match(/detail\((\d+)\)/);if(m&&typeof window.detail==='function')window.detail(Number(m[1]))});var addBtn=card.querySelector('.add');if(addBtn){addBtn.removeAttribute('onclick');addBtn.addEventListener('click',function(e){e.stopPropagation();var m=(originalCard.innerHTML.match(/add\((\d+)\)/)||[])[1];if(m&&typeof window.add==='function')window.add(Number(m))})}var heart=card.querySelector('.heart');if(heart){heart.removeAttribute('onclick');heart.addEventListener('click',function(e){e.stopPropagation();var m=(originalCard.innerHTML.match(/toggleWish\((\d+)\)/)||[])[1];if(m&&typeof window.toggleWish==='function')window.toggleWish(Number(m))})}rg.appendChild(card);});box.appendChild(sec);}
+  function hookDetail(){if(typeof window.detail!=='function'||window.__luxeraDetailHooked)return !!window.__luxeraDetailHooked;var original=window.detail;window.detail=function(id){original(id);setTimeout(function(){addRelatedProducts(document.querySelector('.modal.show'),id)},120)};window.__luxeraDetailHooked=true;return true;}
+  function fixOrder(){if(typeof window.order!=='function'||window.__luxeraOrderFixed)return !!window.__luxeraOrderFixed;window.order=function(){var fresh=syncCart();var customer=(document.getElementById('customer')?.value||'').trim(),phone=(document.getElementById('phone')?.value||'').trim(),address=(document.getElementById('address')?.value||'').trim();var msg=document.getElementById('msg');if(!customer||!phone||!address){if(msg)msg.textContent='সব তথ্য পূরণ করুন।';return}if(!fresh.length){if(msg)msg.textContent='Cart খালি।';return}if(msg)msg.textContent='Order পাঠানো হচ্ছে...';var items=fresh.map(function(x){return{id:Number(x.id),name:x.name||'Product',category:x.category||'',price:Number(x.price||0),qty:Number(x.qty||1),image:x.image||x.image_url||''}});var total=items.reduce(function(s,x){return s+x.price*x.qty},0);fetch(API+'/api/fashion/orders',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({customer_name:customer,customer:customer,name:customer,phone:phone,address:address,items:items,total:total})}).then(function(r){return r.json().then(function(j){if(!r.ok)throw Error(j.error||'Order failed');return j})}).then(function(j){localStorage.luxAcc=JSON.stringify({name:customer,phone:phone,address:address});cart=[];localStorage.setItem('luxCart','[]');if(typeof counts==='function')counts();if(msg)msg.textContent='✅ Order সফল! Order ID: #'+j.order_id;setTimeout(function(){closeM('checkout')},1800)}).catch(function(e){if(msg)msg.textContent='❌ '+e.message});};window.__luxeraOrderFixed=true;return true;}
+  function fixCart(){syncCart();compactCartStyle();}
+  function start(){compactCartStyle();loadHero();arrange();hookDetail();fixOrder();fixCart();setTimeout(function(){loadHero();arrange();hookDetail();fixOrder();fixCart();},700);setTimeout(function(){loadHero();hideHeroCards();},1700);}
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start);else start();
 })();
