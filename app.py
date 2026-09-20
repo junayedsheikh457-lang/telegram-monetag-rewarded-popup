@@ -8,11 +8,15 @@ BOT_TOKEN=os.getenv('BOT_TOKEN','').strip(); ADMIN_PASSWORD=os.getenv('ADMIN_PAS
 app=Flask(__name__,static_folder='miniapp')
 @app.after_request
 def cors(response):
- response.headers['Access-Control-Allow-Origin']='*'; response.headers['Access-Control-Allow-Headers']='Content-Type, X-Admin-Password'; response.headers['Access-Control-Allow-Methods']='GET,POST,PUT,DELETE,OPTIONS'; return response
+ response.headers['Access-Control-Allow-Origin']='*'; response.headers['Access-Control-Allow-Headers']='Content-Type, X-Admin-Password'; response.headers['Access-Control-Allow-Methods']='GET,POST,PUT,DELETE,OPTIONS'
+ if request.path in ('/fashion','/fashion/','/fashion/admin','/fashion/admin/') and response.content_type and 'text/html' in response.content_type:
+  src='/fashion/orders.js' if request.path.rstrip('/')=='/fashion' else '/fashion/admin-orders.js'
+  body=response.get_data(as_text=True); response.set_data(body.replace('</body>',f'<script src="{src}"></script></body>'))
+ return response
 def db():
  c=sqlite3.connect(DB_PATH,timeout=60); c.row_factory=sqlite3.Row; c.execute('PRAGMA busy_timeout=60000')
- try: c.execute('PRAGMA journal_mode=WAL')
- except sqlite3.OperationalError: pass
+ try:c.execute('PRAGMA journal_mode=WAL')
+ except sqlite3.OperationalError:pass
  c.execute('PRAGMA synchronous=NORMAL'); return c
 def init_db():
  c=db(); c.executescript('''CREATE TABLE IF NOT EXISTS products(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT NOT NULL,category TEXT,price REAL NOT NULL,old_price REAL,image_url TEXT,description TEXT,stock INTEGER NOT NULL DEFAULT 0,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL);CREATE TABLE IF NOT EXISTS orders(id INTEGER PRIMARY KEY AUTOINCREMENT,customer_name TEXT NOT NULL,phone TEXT NOT NULL,address TEXT NOT NULL,items TEXT NOT NULL,total REAL NOT NULL,status TEXT NOT NULL DEFAULT 'Pending',created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL,public_token TEXT);CREATE TABLE IF NOT EXISTS users(telegram_id TEXT PRIMARY KEY,username TEXT,first_name TEXT,balance REAL NOT NULL DEFAULT 0,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL);CREATE TABLE IF NOT EXISTS rewards(id INTEGER PRIMARY KEY AUTOINCREMENT,telegram_id TEXT NOT NULL,amount REAL NOT NULL,event_id TEXT UNIQUE,source TEXT NOT NULL,created_at INTEGER NOT NULL);''')
@@ -34,6 +38,8 @@ def fashion():return send_from_directory('fashion','index.html')
 def admin():return send_from_directory('fashion','admin.html')
 @app.get('/fashion/orders.js')
 def fashion_orders_js():return send_from_directory('fashion','orders.js')
+@app.get('/fashion/admin-orders.js')
+def fashion_admin_orders_js():return send_from_directory('fashion','admin-orders.js')
 @app.get('/api/products')
 def products():
  c=db(); rows=c.execute('SELECT * FROM products ORDER BY id DESC').fetchall(); c.close(); return jsonify(items=[product_dict(r) for r in rows])
