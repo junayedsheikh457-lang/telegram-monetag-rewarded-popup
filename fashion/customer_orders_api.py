@@ -1,6 +1,6 @@
 import json, time
 from flask import jsonify, request
-from app import app, DB_PATH
+from app import app
 from fashion_backend import fdb
 
 @app.after_request
@@ -10,11 +10,18 @@ def luxera_inject_orders_script(response):
             body = response.get_data(as_text=True)
             path = request.path.rstrip('/') or '/'
             if path == '/fashion/admin':
-                tag = '<script src="/fashion/admin-orders.js?v=4"></script>'
+                tag = '<script defer src="/fashion/admin-orders.js?v=5"></script>'
+            elif path in ('/', '/fashion'):
+                tag = '<script defer src="/fashion/orders.js?v=7"></script>'
             else:
-                tag = '<script src="/fashion/orders.js?v=6"></script>'
-            if tag not in body and '</body>' in body:
-                body = body.replace('</body>', tag + '</body>')
+                tag = ''
+            if tag and tag not in body:
+                if '</body>' in body:
+                    body = body.replace('</body>', tag + '</body>')
+                elif '</html>' in body:
+                    body = body.replace('</html>', tag + '</html>')
+                else:
+                    body += tag
                 response.set_data(body)
     except Exception:
         pass
@@ -69,5 +76,6 @@ def luxera_cancel_my_order():
         except Exception:
             pass
     c.execute("UPDATE orders SET status='Cancelled',updated_at=? WHERE id=?", (now, oid))
-    c.commit(); c.close()
+    c.commit()
+    c.close()
     return jsonify(ok=True)
