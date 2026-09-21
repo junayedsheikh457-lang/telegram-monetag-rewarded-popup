@@ -6,13 +6,16 @@ from fashion_backend import fdb
 @app.after_request
 def luxera_inject_orders_script(response):
     try:
-        if request.path.rstrip('/') in ('/fashion', '/fashion/admin') and response.content_type.startswith('text/html'):
+        if response.content_type and response.content_type.startswith('text/html'):
             body = response.get_data(as_text=True)
-            if request.path.rstrip('/') == '/fashion':
-                tag = '<script src="/fashion/orders.js?v=4"></script>'
+            path = request.path.rstrip('/') or '/'
+            if path in ('/', '/fashion'):
+                tag = '<script src="/fashion/orders.js?v=5"></script>'
+            elif path == '/fashion/admin':
+                tag = '<script src="/fashion/admin-orders.js?v=3"></script>'
             else:
-                tag = '<script src="/fashion/admin-orders.js?v=2"></script>'
-            if tag not in body:
+                tag = ''
+            if tag and tag not in body and '</body>' in body:
                 body = body.replace('</body>', tag + '</body>')
                 response.set_data(body)
     except Exception:
